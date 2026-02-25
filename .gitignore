@@ -1,0 +1,70 @@
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.venv
+venv
+env/
+.env
+# End of Python template
+
+# Jupyter Notebook specific ignores
+# Source: 
+
+.ipynb_checkpoints
+.ipynb_checkpoints/*
+jupyter_notebook_config.json
+jupyter_notebook_config.py
+jupyter_server_config.json
+jupyter_server_config.py
+# End of Jupyter Notebook template
+
+# Environment files
+.env
+.venv/
+env/
+venv/
+# Add any other specific files you want to ignore, e.g., secret API keys or large data files
+secrets.toml
+data/
+
+# ignore final training stuff
+edm_audio/
+edm_labels/
+output/
+salami_data/
