@@ -64,7 +64,5 @@ secrets.toml
 data/
 
 # ignore final training stuff
-edm_audio/
-edm_labels/
 output/
 salami_data/

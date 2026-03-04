@@ -1,0 +1,9 @@
+start,end,label
+0.000,11.621,calm
+11.621,26.560,buildup
+26.560,46.472,drop
+46.472,59.741,breakdown
+59.741,72.800,buildup
+72.800,111.240,drop
+111.240,124.080,breakdown
+124.080,137.200,calm
