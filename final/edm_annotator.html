@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EDM Annotator v2</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500&family=Syne:wght@700;800&display=swap');
+
+:root {
+  --drop:      #FF3355;
+  --buildup:   #FF9500;
+  --breakdown: #B44FFF;
+  --calm:      #00D4FF;
+  --bg:        #06060A;
+  --surface:   #0D0D14;
+  --surface2:  #12121C;
+  --border:    #1C1C2E;
+  --border2:   #252538;
+  --text:      #E0E0F0;
+  --muted:     #555570;
+  --muted2:    #888899;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); }
+
+body {
+  font-family: 'DM Mono', monospace;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  user-select: none;
+}
+
+/* ── HEADER ───────────────────────────────── */
+#header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 20px;
+  height: 48px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: var(--drop);
+}
+#logo span { color: var(--muted2); }
+#song-info { flex: 1; font-size: 11px; color: var(--muted2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#time-display {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--calm);
+  letter-spacing: 2px;
+  min-width: 90px;
+  text-align: right;
+}
+#load-new-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all .15s;
+}
+#load-new-btn:hover { border-color: var(--calm); color: var(--calm); }
+
+/* ── DROPZONE ─────────────────────────────── */
+#dropzone {
+  position: fixed; inset: 48px 0 0 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 24px; cursor: pointer; z-index: 50;
+  background: var(--bg);
+  transition: background .2s;
+}
+#dropzone.over { background: rgba(255,51,85,.04); }
+#dropzone.hidden { display: none; }
+.dz-ring {
+  width: 180px; height: 180px;
+  border: 1.5px dashed var(--border2);
+  border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  transition: border-color .2s;
+}
+#dropzone.over .dz-ring { border-color: var(--drop); }
+.dz-icon { font-size: 32px; opacity: .3; }
+.dz-label { font-family: 'Syne', sans-serif; font-size: 11px; letter-spacing: 3px; color: var(--muted); }
+.dz-sub { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+.dz-csv { font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 8px; }
+.dz-csv label { color: var(--buildup); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+#file-input, #preload-csv-input { display: none; }
+
+/* ── WORKSPACE ────────────────────────────── */
+#workspace {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+#workspace.show { display: flex; }
+
+/* ── WAVEFORM AREA ────────────────────────── */
+#viz {
+  position: relative;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+/* zoom controls */
+#zoom-controls {
+  position: absolute;
+  top: 6px; right: 8px;
+  display: flex; align-items: center; gap: 4px;
+  z-index: 10;
+}
+.zb {
+  background: rgba(13,13,20,.8);
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.zb:hover { color: var(--text); border-color: var(--muted2); }
+#zoom-label { font-size: 10px; color: var(--muted); padding: 0 4px; min-width: 32px; text-align: center; }
+
+canvas { display: block; width: 100%; cursor: crosshair; }
+#waveform-canvas { height: 80px; }
+#label-canvas    { height: 44px; }
+
+#playhead {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  background: white;
+  box-shadow: 0 0 8px rgba(255,255,255,.6);
+  pointer-events: none;
+}
+
+/* scrollbar */
+#scrollbar {
+  height: 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: relative; cursor: pointer;
+  display: none;
+}
+#scroll-thumb {
+  position: absolute; top: 1px; height: 6px;
+  background: var(--border2); border-radius: 3px;
+  cursor: grab; transition: background .15s;
+}
+#scroll-thumb:hover, #scroll-thumb.dragging { background: var(--muted); cursor: grabbing; }
+
+/* active label strip */
+#active-strip { height: 3px; transition: background .2s; flex-shrink: 0; }
+
+/* ── TRANSPORT ────────────────────────────── */
+#transport {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tb {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .5px;
+  padding: 5px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s;
+}
+.tb:hover { border-color: var(--muted2); color: var(--text); }
+.tb.on { border-color: var(--drop); color: var(--drop); background: rgba(255,51,85,.08); }
+.tb.play-on { border-color: var(--drop); color: var(--drop); }
+select.tb { appearance: none; padding-right: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23555570'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 6px center; }
+.tsep { width: 1px; height: 18px; background: var(--border2); margin: 0 2px; }
+#nudge-hint { font-size: 9px; color: var(--muted); letter-spacing: .5px; margin-left: auto; }
+
+/* ── BOTTOM SPLIT ─────────────────────────── */
+#bottom {
+  display: flex; flex: 1; min-height: 0; overflow: hidden;
+}
+
+/* ── LABEL PALETTE ────────────────────────── */
+#palette {
+  width: 140px; flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 12px 10px; gap: 6px;
+}
+#palette-title { font-size: 9px; letter-spacing: 3px; color: var(--muted); margin-bottom: 2px; }
+.lbtn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid;
+  background: transparent;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  transition: background .15s;
+  position: relative;
+}
+.lbtn .hotkey {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px; font-weight: 800;
+  line-height: 1; width: 18px;
+}
+.lbtn .lname { font-size: 9px; letter-spacing: 2px; }
+.lbtn[data-l="drop"]      { border-color: var(--drop);      color: var(--drop); }
+.lbtn[data-l="buildup"]   { border-color: var(--buildup);   color: var(--buildup); }
+.lbtn[data-l="breakdown"] { border-color: var(--breakdown); color: var(--breakdown); }
+.lbtn[data-l="calm"]      { border-color: var(--calm);      color: var(--calm); }
+.lbtn:hover, .lbtn.recording { background: rgba(255,255,255,.05); }
+@keyframes lflash { 0%,100%{opacity:1} 50%{opacity:.4} }
+.lbtn.flash { animation: lflash .15s; }
+.rec-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; margin-left: auto;
+  display: none;
+}
+.lbtn.recording .rec-dot { display: block; }
+
+#palette-keys {
+  margin-top: auto;
+  font-size: 9px; color: var(--muted); line-height: 2;
+  letter-spacing: .3px;
+}
+
+/* ── SEGMENT TABLE ────────────────────────── */
+#table-area {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface2);
+}
+#table-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#table-title { font-size: 9px; letter-spacing: 3px; color: var(--muted); flex: 1; }
+.act-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; letter-spacing: .5px;
+  padding: 5px 12px;
+  border: 1px solid; cursor: pointer;
+  transition: all .15s;
+}
+#import-btn { background: transparent; border-color: var(--border2); color: var(--muted2); }
+#import-btn:hover { border-color: var(--buildup); color: var(--buildup); }
+#export-btn { background: var(--drop); border-color: var(--drop); color: white; font-weight: 500; }
+#export-btn:hover { opacity: .85; }
+#csv-import-input { display: none; }
+
+#table-scroll { flex: 1; overflow-y: auto; }
+#table-scroll::-webkit-scrollbar { width: 3px; }
+#table-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+thead th {
+  text-align: left; font-size: 9px; letter-spacing: 2px;
+  color: var(--muted); padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface2);
+}
+tbody tr { border-bottom: 1px solid rgba(255,255,255,.025); cursor: pointer; }
+tbody tr:hover { background: rgba(255,255,255,.025); }
+tbody tr.selected { background: rgba(255,255,255,.045); }
+tbody td { padding: 5px 10px; vertical-align: middle; }
+
+/* inline label dropdown */
+.label-sel {
+  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+  letter-spacing: 1px;
+  background: transparent; border: none;
+  cursor: pointer; padding: 0;
+  outline: none;
+}
+.label-sel:focus { outline: 1px solid var(--border2); }
+.label-sel[data-l="drop"]      { color: var(--drop); }
+.label-sel[data-l="buildup"]   { color: var(--buildup); }
+.label-sel[data-l="breakdown"] { color: var(--breakdown); }
+.label-sel[data-l="calm"]      { color: var(--calm); }
+option { background: #111; color: var(--text); }
+
+/* editable time inputs */
+.time-inp {
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  background: transparent; border: none; color: var(--muted2);
+  width: 62px; cursor: text;
+  border-bottom: 1px solid transparent;
+  padding: 1px 0;
+}
+.time-inp:focus { outline: none; border-bottom-color: var(--calm); color: var(--text); }
+.time-inp:hover { border-bottom-color: var(--border2); }
+
+.dur-cell { color: var(--muted); font-size: 10px; }
+
+.row-actions { display: flex; gap: 4px; }
+.ic {
+  background: none; border: none; font-size: 12px;
+  cursor: pointer; padding: 2px 5px; color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  transition: color .12s;
+}
+.ic.go:hover  { color: var(--calm); }
+.ic.del:hover { color: var(--drop); }
+
+/* ── STATUS BAR ───────────────────────────── */
+#statusbar {
+  display: flex; align-items: center; gap: 20px;
+  padding: 4px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 9px; letter-spacing: 1px; color: var(--muted);
+  flex-shrink: 0;
+}
+#statusbar b { color: var(--muted2); font-weight: 400; }
+#status-msg { margin-left: auto; color: var(--calm); }
+
+/* ── TOOLTIP ──────────────────────────────── */
+#tip {
+  position: fixed; z-index: 999;
+  background: var(--surface2); border: 1px solid var(--border2);
+  font-size: 10px; padding: 3px 8px; letter-spacing: .3px;
+  pointer-events: none; opacity: 0; transition: opacity .1s;
+}
+#tip.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="logo">EDM <span>ANNOTATOR</span></div>
+  <span id="song-info">no file loaded · drop an mp3 to begin</span>
+  <span id="time-display">0:00.0</span>
+  <button id="load-new-btn">LOAD NEW</button>
+</div>
+
+<!-- Drop zone -->
+<div id="dropzone" id="dropzone">
+  <div class="dz-ring">
+    <div class="dz-icon">♫</div>
+    <div class="dz-label">DROP MP3</div>
+  </div>
+  <div class="dz-sub">or click anywhere to browse</div>
+  <div class="dz-csv">already have labels? <label for="preload-csv-input">load CSV first</label></div>
+  <input type="file" id="file-input" accept="audio/*">
+  <input type="file" id="preload-csv-input" accept=".csv">
+</div>
+
+<!-- Workspace -->
+<div id="workspace">
+  <div id="active-strip"></div>
+
+  <div id="viz">
+    <div id="zoom-controls">
+      <button class="zb" id="z-out">−</button>
+      <span id="zoom-label">1×</span>
+      <button class="zb" id="z-in">+</button>
+      <button class="zb" id="z-fit" title="reset zoom">fit</button>
+    </div>
+    <canvas id="waveform-canvas"></canvas>
+    <canvas id="label-canvas"></canvas>
+    <div id="playhead"></div>
+  </div>
+  <div id="scrollbar"><div id="scroll-thumb"></div></div>
+
+  <div id="transport">
+    <button class="tb" id="play-btn">▶ PLAY</button>
+    <button class="tb" id="rew-btn">◀◀ REW</button>
+    <div class="tsep"></div>
+    <button class="tb" id="loop-btn">⟳ LOOP</button>
+    <div class="tsep"></div>
+    <button class="tb" id="nudge-l-btn">◀ .1s</button>
+    <button class="tb" id="nudge-r-btn">.1s ▶</button>
+    <div class="tsep"></div>
+    <select class="tb" id="speed-sel">
+      <option value="1">1× speed</option>
+      <option value="0.75">0.75×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1.25">1.25×</option>
+    </select>
+    <div class="tsep"></div>
+    <button class="tb" id="undo-btn">↩ UNDO</button>
+    <button class="tb" id="clear-btn">✕ CLEAR</button>
+    <span id="nudge-hint">DRAG HANDLES TO ADJUST · [ ] NUDGE · SCROLL TO ZOOM</span>
+  </div>
+
+  <div id="bottom">
+    <div id="palette">
+      <div id="palette-title">LABELS</div>
+      <button class="lbtn" data-l="drop">
+        <span class="hotkey">D</span><span class="lname">DROP</span><span class="rec-dot"></span>
+      </button>
+      <button class="lbtn" data-l="buildup">
+        <span class="hotkey">B</span><span class="lname">BUILDUP</span><span class="rec-dot"></span>
+      </button>
+      <button class="lbtn" data-l="breakdown">
+        <span class="hotkey">K</span><span class="lname">BREAKDOWN</span><span class="rec-dot"></span>
+      </button>
+      <button class="lbtn" data-l="calm">
+        <span class="hotkey">C</span><span class="lname">CALM</span><span class="rec-dot"></span>
+      </button>
+      <div id="palette-keys">
+        SPACE play/pause<br>
+        R  rewind<br>
+        U  undo<br>
+        F  finish segment<br>
+        [  nudge start −.1s<br>
+        ]  nudge end +.1s<br>
+        ←→ seek ±5s<br>
+        scroll = zoom
+      </div>
+    </div>
+
+    <div id="table-area">
+      <div id="table-toolbar">
+        <span id="table-title">SEGMENTS · <span id="seg-count">0</span></span>
+        <button class="act-btn" id="import-btn">↑ IMPORT CSV</button>
+        <button class="act-btn" id="export-btn">↓ EXPORT CSV</button>
+        <input type="file" id="csv-import-input" accept=".csv">
+      </div>
+      <div id="table-scroll">
+        <table>
+          <thead>
+            <tr><th>#</th><th>LABEL</th><th>START</th><th>END</th><th>DUR</th><th></th></tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div id="statusbar">
+        <span>SEGS <b id="sb-segs">0</b></span>
+        <span>COVERAGE <b id="sb-cov">0%</b></span>
+        <span>GAPS <b id="sb-gaps">—</b></span>
+        <span id="status-msg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tip"></div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════ */
+let audioCtx, audioBuffer, sourceNode;
+let isPlaying = false, startOffset = 0, startedAt = 0;
+let currentTime = 0, duration = 0, playRate = 1;
+let songName = '';
+
+let segments = [];   // {id, start, end, label}
+let uid = 0;
+
+let recLabel = null, recStart = null;  // currently recording
+let undoStack = [];
+let selectedId = null;
+let pendingCSV = null;
+
+// zoom / scroll
+let zoom = 1, scrollFrac = 0;  // scrollFrac = left-edge fraction
+
+// drag
+let dragData = null;  // {type:'boundary'|'scroll', segId, side:'start'|'end', originX, originT}
+
+// loop
+let looping = false, loopA = null, loopB = null;
+
+const C = {
+  drop:'#FF3355', buildup:'#FF9500', breakdown:'#B44FFF', calm:'#00D4FF'
+};
+
+/* ═══════════════════════════════════════════════
+   FILE LOADING
+═══════════════════════════════════════════════ */
+const dz = document.getElementById('dropzone');
+const fi = document.getElementById('file-input');
+
+dz.addEventListener('click', e => {
+  if (e.target.closest('label') || e.target.id === 'preload-csv-input') return;
+  fi.click();
+});
+fi.addEventListener('change', e => e.target.files[0] && loadAudio(e.target.files[0]));
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const f = [...e.dataTransfer.files].find(f => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i));
+  if (f) loadAudio(f);
+});
+
+document.getElementById('preload-csv-input').addEventListener('change', e => {
+  if (e.target.files[0]) parseCsvFile(e.target.files[0], segs => { pendingCSV = segs; showMsg('CSV queued — now load the mp3'); });
+});
+
+document.getElementById('load-new-btn').addEventListener('click', () => fi.click());
+
+async function loadAudio(file) {
+  songName = file.name.replace(/\.[^.]+$/, '');
+  document.getElementById('song-info').textContent = songName;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const ab = await file.arrayBuffer();
+  audioBuffer = await audioCtx.decodeAudioData(ab);
+  duration = audioBuffer.duration;
+  zoom = 1; scrollFrac = 0;
+  dz.classList.add('hidden');
+  document.getElementById('workspace').classList.add('show');
+  drawWaveform();
+  updateScrollbar();
+  resetPlay();
+  if (pendingCSV) {
+    segments = pendingCSV.map(s => ({...s, id: uid++}));
+    pendingCSV = null;
+    renderAll();
+    showMsg(`Loaded ${segments.length} segments from CSV`);
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ═══════════════════════════════════════════════
+   COORDINATE HELPERS
+═══════════════════════════════════════════════ */
+function fracToX(frac, W) { return (frac - scrollFrac) * zoom * W; }
+function xToFrac(x, W)    { return scrollFrac + x / (zoom * W); }
+function viewEnd()         { return scrollFrac + 1 / zoom; }
+
+/* ═══════════════════════════════════════════════
+   DRAWING
+═══════════════════════════════════════════════ */
+function drawWaveform() {
+  const cv = document.getElementById('waveform-canvas');
+  const W = cv.parentElement.clientWidth;
+  cv.width = W; cv.height = 80;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#0D0D14'; ctx.fillRect(0,0,W,80);
+  if (!audioBuffer) return;
+
+  const data = audioBuffer.getChannelData(0);
+  const N = data.length;
+  const vs = scrollFrac, ve = viewEnd();
+  const iS = Math.floor(vs * N), iE = Math.ceil(ve * N);
+  const spp = (iE - iS) / W;
+
+  // centre line
+  ctx.strokeStyle = '#1C1C2E'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,40); ctx.lineTo(W,40); ctx.stroke();
+
+  ctx.beginPath(); ctx.strokeStyle = '#00D4FF'; ctx.lineWidth = 1;
+  for (let x = 0; x < W; x++) {
+    let mn = 0, mx = 0;
+    for (let j = Math.floor(x*spp); j < Math.ceil((x+1)*spp); j++) {
+      const v = data[iS+j]||0; if(v<mn)mn=v; if(v>mx)mx=v;
+    }
+    ctx.moveTo(x+.5, 40+mn*36); ctx.lineTo(x+.5, 40+mx*36);
+  }
+  ctx.stroke();
+}
+
+function drawLabels() {
+  const cv = document.getElementById('label-canvas');
+  const W = cv.parentElement.clientWidth;
+  cv.width = W; cv.height = 44;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#0D0D14'; ctx.fillRect(0,0,W,44);
+  if (!duration) return;
+
+  const vs = scrollFrac, ve = viewEnd();
+
+  // committed segments
+  [...segments].sort((a,b)=>a.start-b.start).forEach(seg => {
+    const sf = seg.start/duration, ef = seg.end/duration;
+    if (ef < vs || sf > ve) return;
+    const x1 = Math.max(0, fracToX(sf, W));
+    const x2 = Math.min(W, fracToX(ef, W));
+    if (x2 - x1 < .5) return;
+
+    const alpha = seg.id === selectedId ? 'cc' : '88';
+    ctx.fillStyle = C[seg.label] + alpha;
+    ctx.fillRect(x1, 0, x2-x1, 36);
+
+    // label text
+    if (x2 - x1 > 20) {
+      ctx.fillStyle = 'rgba(255,255,255,.9)';
+      ctx.font = 'bold 9px "DM Mono",monospace';
+      ctx.fillText(seg.label.toUpperCase(), x1+4, 13);
+    }
+
+    // boundary handles
+    const HW = 7;
+    // start handle
+    if (sf >= vs - .01 && sf <= ve + .01) {
+      ctx.fillStyle = C[seg.label];
+      ctx.fillRect(x1 - 2, 0, HW, 36);
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      [10,18,26].forEach(y => ctx.fillRect(x1+.5, y, 2, 3));
+    }
+    // end handle
+    if (ef >= vs - .01 && ef <= ve + .01) {
+      ctx.fillStyle = C[seg.label];
+      ctx.fillRect(x2 - HW + 2, 0, HW, 36);
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      [10,18,26].forEach(y => ctx.fillRect(x2-3, y, 2, 3));
+    }
+  });
+
+  // active recording
+  if (recLabel && recStart !== null) {
+    const sf = recStart/duration, ef = currentTime/duration;
+    const x1 = Math.max(0, fracToX(sf, W));
+    const x2 = Math.min(W, fracToX(ef, W));
+    ctx.fillStyle = C[recLabel] + '44';
+    ctx.fillRect(x1, 0, x2-x1, 36);
+    ctx.strokeStyle = C[recLabel];
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x1, 0, x2-x1, 36);
+  }
+
+  // loop region overlay
+  if (looping && loopA !== null) {
+    const x1 = fracToX(loopA/duration, W), x2 = fracToX(loopB/duration, W);
+    ctx.strokeStyle = 'rgba(255,149,0,.5)'; ctx.lineWidth = 1;
+    ctx.setLineDash([4,3]); ctx.strokeRect(x1,0,x2-x1,36); ctx.setLineDash([]);
+  }
+
+  // time ruler
+  drawRuler(ctx, W, vs, ve);
+}
+
+function drawRuler(ctx, W, vs, ve) {
+  const visSec = (ve - vs) * duration;
+  const ticks = [.5,1,2,5,10,15,30,60];
+  const pxps = W / visSec;
+  const intv = ticks.find(t => t * pxps >= 44) || 120;
+  const tS = Math.ceil(vs * duration / intv) * intv;
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.font = '8px "DM Mono",monospace';
+  for (let t = tS; t <= ve*duration; t += intv) {
+    const x = fracToX(t/duration, W);
+    ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x, 36, 1, 8);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillText(fmtShort(t), x+2, 43);
+  }
+}
+
+function fmtShort(t) {
+  return `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
+}
+
+/* ═══════════════════════════════════════════════
+   ANIMATION LOOP
+═══════════════════════════════════════════════ */
+function loop() {
+  currentTime = Math.min(getTime(), duration);
+  if (isPlaying && looping && loopA !== null && currentTime >= loopB) play(loopA);
+  updatePlayhead();
+  updateTimestamp();
+  drawLabels();
+  requestAnimationFrame(loop);
+}
+
+function getTime() {
+  if (!isPlaying) return startOffset;
+  return startOffset + (audioCtx.currentTime - startedAt) * playRate;
+}
+
+function updatePlayhead() {
+  const viz = document.getElementById('viz');
+  const ph  = document.getElementById('playhead');
+  const x   = fracToX(currentTime/duration, viz.clientWidth);
+  if (x < 0 || x > viz.clientWidth) { ph.style.display = 'none'; return; }
+  ph.style.display = 'block'; ph.style.left = x + 'px';
+}
+
+function updateTimestamp() {
+  const m = Math.floor(currentTime/60);
+  const s = (currentTime%60).toFixed(1).padStart(4,'0');
+  document.getElementById('time-display').textContent = `${m}:${s}`;
+}
+
+/* ═══════════════════════════════════════════════
+   PLAYBACK
+═══════════════════════════════════════════════ */
+function play(offset) {
+  if (isPlaying) { sourceNode?.stop(); isPlaying = false; }
+  startOffset = Math.max(0, Math.min(offset ?? startOffset, duration - .01));
+  sourceNode = audioCtx.createBufferSource();
+  sourceNode.buffer = audioBuffer;
+  sourceNode.playbackRate.value = playRate;
+  sourceNode.connect(audioCtx.destination);
+  sourceNode.start(0, startOffset);
+  sourceNode.onended = () => { if(isPlaying){ isPlaying=false; updatePlayBtn(); finalizeRec(); } };
+  startedAt = audioCtx.currentTime; isPlaying = true; updatePlayBtn();
+}
+
+function pause() {
+  if (!isPlaying) return;
+  startOffset = getTime(); sourceNode?.stop(); isPlaying = false; updatePlayBtn();
+}
+
+function togglePlay() {
+  if (isPlaying) pause();
+  else { if(audioCtx?.state==='suspended') audioCtx.resume(); play(); }
+}
+
+function resetPlay() { pause(); startOffset=0; currentTime=0; updateTimestamp(); }
+
+function updatePlayBtn() {
+  const b = document.getElementById('play-btn');
+  b.textContent = isPlaying ? '⏸ PAUSE' : '▶ PLAY';
+  b.classList.toggle('play-on', isPlaying);
+}
+
+/* ═══════════════════════════════════════════════
+   ZOOM & SCROLL
+═══════════════════════════════════════════════ */
+function setZoom(newZ, centerFrac) {
+  if (!duration) return;
+  newZ = Math.max(1, Math.min(32, newZ));
+  const c = centerFrac ?? (scrollFrac + .5/zoom);
+  zoom = newZ;
+  scrollFrac = Math.max(0, Math.min(1 - 1/zoom, c - .5/zoom));
+  document.getElementById('zoom-label').textContent = zoom.toFixed(zoom<2?1:0) + '×';
+  document.getElementById('scrollbar').style.display = zoom > 1 ? 'block' : 'none';
+  drawWaveform(); updateScrollbar();
+}
+
+function updateScrollbar() {
+  if (zoom <= 1) return;
+  const sb = document.getElementById('scrollbar');
+  const W  = sb.clientWidth;
+  const tw = W / zoom, tx = scrollFrac * zoom * W;
+  const thumb = document.getElementById('scroll-thumb');
+  thumb.style.width = tw + 'px'; thumb.style.left = tx + 'px';
+}
+
+// scroll thumb drag
+let sbDrag = false, sbX0 = 0, sbS0 = 0;
+document.getElementById('scroll-thumb').addEventListener('mousedown', e => {
+  sbDrag=true; sbX0=e.clientX; sbS0=scrollFrac;
+  document.getElementById('scroll-thumb').classList.add('dragging');
+  e.stopPropagation();
+});
+
+// zoom buttons
+document.getElementById('z-in').addEventListener('click', () => setZoom(zoom * 1.6));
+document.getElementById('z-out').addEventListener('click', () => setZoom(zoom / 1.6));
+document.getElementById('z-fit').addEventListener('click', () => setZoom(1));
+
+// wheel zoom on viz
+document.getElementById('viz').addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = e.currentTarget.getBoundingClientRect();
+  const cf = xToFrac(e.clientX - rect.left, rect.width);
+  setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1/1.15), cf);
+}, { passive: false });
+
+/* ═══════════════════════════════════════════════
+   LABEL CANVAS MOUSE — drag handles + seek
+═══════════════════════════════════════════════ */
+const HTOL = 10; // px hit tolerance for handles
+
+function hitHandle(x, W) {
+  const t = xToFrac(x, W) * duration;
+  const pxPerSec = W * zoom / duration;
+  const tol = HTOL / pxPerSec;
+  let best = null, bd = Infinity;
+  segments.forEach(seg => {
+    const ds = Math.abs(seg.start - t), de = Math.abs(seg.end - t);
+    if (ds < tol && ds < bd) { best = {seg, side:'start'}; bd = ds; }
+    if (de < tol && de < bd) { best = {seg, side:'end'};   bd = de; }
+  });
+  return best;
+}
+
+const lc = document.getElementById('label-canvas');
+
+lc.addEventListener('mousedown', e => {
+  if (!audioBuffer) return;
+  const rect = lc.getBoundingClientRect();
+  const x = e.clientX - rect.left, W = rect.width;
+  const hit = hitHandle(x, W);
+  if (hit) {
+    saveUndo();
+    dragData = { type:'boundary', seg:hit.seg, side:hit.side, originX:e.clientX, originT: hit.seg[hit.side] };
+    e.preventDefault(); return;
+  }
+  // seek
+  const t = Math.max(0, Math.min(duration, xToFrac(x, W) * duration));
+  startOffset = t; if (isPlaying) play(t);
+});
+
+lc.addEventListener('mousemove', e => {
+  if (!audioBuffer) return;
+  const rect = lc.getBoundingClientRect();
+  const x = e.clientX - rect.left, W = rect.width;
+
+  if (dragData?.type === 'boundary') {
+    const secPerPx = duration / (W * zoom);
+    const dt = (e.clientX - dragData.originX) * secPerPx;
+    const seg = dragData.seg;
+    let nt = Math.max(0, Math.min(duration, dragData.originT + dt));
+    if (dragData.side === 'start') {
+      // clamp: must not cross end, must not overlap prev seg end
+      const prevEnd = Math.max(0, ...segments.filter(s=>s.id!==seg.id&&s.end<=seg.start+.05).map(s=>s.end));
+      nt = Math.max(prevEnd, Math.min(seg.end - .05, nt));
+      seg.start = nt;
+    } else {
+      const nextStart = Math.min(duration, ...segments.filter(s=>s.id!==seg.id&&s.start>=seg.end-.05).map(s=>s.start).concat([duration]));
+      nt = Math.max(seg.start + .05, Math.min(nextStart, nt));
+      seg.end = nt;
+    }
+    renderTable();
+    tip(e.clientX, e.clientY, fmtFull(nt));
+    return;
+  }
+
+  const hit = hitHandle(x, W);
+  lc.style.cursor = hit ? 'ew-resize' : 'crosshair';
+
+  // hover tooltip: show segment info
+  const t = xToFrac(x, W) * duration;
+  const hovSeg = segments.find(s => t >= s.start && t <= s.end);
+  if (hovSeg) tip(e.clientX, e.clientY, `${hovSeg.label} · ${fmtFull(hovSeg.start)} → ${fmtFull(hovSeg.end)}`);
+  else hideTip();
+});
+
+lc.addEventListener('mouseup', () => { dragData = null; hideTip(); });
+lc.addEventListener('mouseleave', () => { dragData = null; hideTip(); });
+
+// waveform canvas also seeks
+document.getElementById('waveform-canvas').addEventListener('mousedown', e => {
+  if (!audioBuffer) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const t = Math.max(0, Math.min(duration, xToFrac(e.clientX - rect.left, rect.width) * duration));
+  startOffset = t; if (isPlaying) play(t);
+});
+
+/* ═══════════════════════════════════════════════
+   GLOBAL MOUSE for drag release + scroll drag
+═══════════════════════════════════════════════ */
+document.addEventListener('mousemove', e => {
+  if (sbDrag) {
+    const sb = document.getElementById('scrollbar');
+    const W  = sb.clientWidth;
+    const dx = (e.clientX - sbX0) / (W * zoom);
+    scrollFrac = Math.max(0, Math.min(1 - 1/zoom, sbS0 + dx));
+    updateScrollbar(); drawWaveform();
+  }
+});
+document.addEventListener('mouseup', () => {
+  if (sbDrag) { sbDrag=false; document.getElementById('scroll-thumb').classList.remove('dragging'); }
+  if (dragData) { dragData = null; hideTip(); }
+});
+
+/* ═══════════════════════════════════════════════
+   LABELING
+═══════════════════════════════════════════════ */
+function pressLabel(label) {
+  if (!audioBuffer) return;
+  saveUndo();
+  // flash + mark recording btn
+  document.querySelectorAll('.lbtn').forEach(b => { b.classList.remove('recording','flash'); });
+  const btn = document.querySelector(`.lbtn[data-l="${label}"]`);
+  btn.classList.add('recording','flash'); setTimeout(()=>btn.classList.remove('flash'),150);
+
+  document.getElementById('active-strip').style.background = C[label];
+
+  const now = getTime();
+  if (recLabel !== null && recStart !== null && now > recStart + .25) {
+    segments.push({id:uid++, start:recStart, end:now, label:recLabel});
+  }
+  recLabel = label; recStart = now;
+  renderTable();
+}
+
+function finalizeRec() {
+  if (recLabel && recStart !== null) {
+    const end = Math.min(currentTime, duration);
+    if (end > recStart + .25) { segments.push({id:uid++, start:recStart, end, label:recLabel}); renderTable(); }
+    recLabel = null; recStart = null;
+    document.querySelectorAll('.lbtn').forEach(b=>b.classList.remove('recording'));
+    document.getElementById('active-strip').style.background = 'transparent';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   UNDO
+═══════════════════════════════════════════════ */
+function saveUndo() {
+  undoStack.push(JSON.stringify(segments));
+  if (undoStack.length > 60) undoStack.shift();
+}
+function undo() {
+  finalizeRec();
+  if (!undoStack.length) return;
+  segments = JSON.parse(undoStack.pop()).map(s=>({...s}));
+  renderAll();
+}
+
+/* ═══════════════════════════════════════════════
+   NUDGE
+═══════════════════════════════════════════════ */
+function nudge(delta) {
+  if (selectedId === null) return;
+  const seg = segments.find(s=>s.id===selectedId); if(!seg) return;
+  saveUndo();
+  // nudge whichever boundary is closer to playhead
+  const ds = Math.abs(seg.start - currentTime), de = Math.abs(seg.end - currentTime);
+  if (ds <= de) seg.start = Math.max(0, Math.min(seg.end-.05, seg.start + delta));
+  else          seg.end   = Math.max(seg.start+.05, Math.min(duration, seg.end + delta));
+  renderTable();
+}
+
+/* ═══════════════════════════════════════════════
+   LOOP
+═══════════════════════════════════════════════ */
+document.getElementById('loop-btn').addEventListener('click', () => {
+  looping = !looping;
+  document.getElementById('loop-btn').classList.toggle('on', looping);
+  document.getElementById('loop-btn').textContent = looping ? '⟳ LOOP ON' : '⟳ LOOP';
+  if (looping) {
+    const sel = segments.find(s=>s.id===selectedId);
+    if (sel) { loopA = Math.max(0,sel.start-.5); loopB = Math.min(duration,sel.end+.5); }
+    else     { loopA = Math.max(0,currentTime-3); loopB = Math.min(duration,currentTime+6); }
+    if (isPlaying) play(loopA);
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   TABLE RENDERING
+═══════════════════════════════════════════════ */
+function fmtFull(t) {
+  return `${Math.floor(t/60)}:${(t%60).toFixed(2).padStart(5,'0')}`;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tbody');
+  const sorted = [...segments].sort((a,b)=>a.start-b.start);
+  tbody.innerHTML = '';
+
+  sorted.forEach((seg, i) => {
+    const dur = (seg.end - seg.start).toFixed(1);
+    const tr = document.createElement('tr');
+    if (seg.id === selectedId) tr.classList.add('selected');
+    tr.dataset.id = seg.id;
+
+    const opts = ['drop','buildup','breakdown','calm'].map(l =>
+      `<option value="${l}"${l===seg.label?' selected':''}>${l.toUpperCase()}</option>`
+    ).join('');
+
+    tr.innerHTML = `
+      <td style="color:var(--muted);font-size:10px">${i+1}</td>
+      <td>
+        <select class="label-sel" data-l="${seg.label}" data-id="${seg.id}">${opts}</select>
+      </td>
+      <td><input class="time-inp" data-id="${seg.id}" data-field="start" value="${fmtFull(seg.start)}"></td>
+      <td><input class="time-inp" data-id="${seg.id}" data-field="end"   value="${fmtFull(seg.end)}"></td>
+      <td class="dur-cell">${dur}s</td>
+      <td>
+        <div class="row-actions">
+          <button class="ic go"  data-id="${seg.id}" title="jump to">▶</button>
+          <button class="ic del" data-id="${seg.id}" title="delete">✕</button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  // label change
+  tbody.querySelectorAll('.label-sel').forEach(sel => {
+    // colour the select
+    sel.dataset.l = sel.value;
+    sel.addEventListener('change', e => {
+      const s = segments.find(s=>s.id===+sel.dataset.id); if(!s)return;
+      saveUndo(); s.label = sel.value; renderTable();
+    });
+    sel.style.color = C[sel.value] || 'inherit';
+    sel.addEventListener('change', e => e.target.style.color = C[e.target.value]);
+  });
+
+  // time inputs
+  tbody.querySelectorAll('.time-inp').forEach(inp => {
+    inp.addEventListener('focus', () => inp.select());
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') inp.blur();
+      e.stopPropagation();
+    });
+    inp.addEventListener('change', e => {
+      const s = segments.find(s=>s.id===+inp.dataset.id); if(!s)return;
+      const t = parseTime(inp.value);
+      if (t === null || t < 0 || t > duration) { inp.value = fmtFull(s[inp.dataset.field]); return; }
+      saveUndo(); s[inp.dataset.field] = t; renderTable();
+    });
+  });
+
+  // jump
+  tbody.querySelectorAll('.ic.go').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      const s = segments.find(s=>s.id===+b.dataset.id); if(!s)return;
+      startOffset = s.start; if (isPlaying) play(s.start);
+    });
+  });
+
+  // delete
+  tbody.querySelectorAll('.ic.del').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation(); saveUndo();
+      segments = segments.filter(s=>s.id!==+b.dataset.id);
+      renderTable();
+    });
+  });
+
+  // row click = select
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', e => {
+      if (['SELECT','INPUT','BUTTON'].includes(e.target.tagName)) return;
+      selectedId = +tr.dataset.id; renderTable();
+    });
+  });
+
+  // counts
+  document.getElementById('seg-count').textContent = segments.length;
+  updateStatus();
+}
+
+function parseTime(str) {
+  str = str.trim();
+  const m = str.match(/^(\d+):(\d+(?:\.\d+)?)$/);
+  if (m) return +m[1]*60 + +m[2];
+  if (/^\d+(\.\d+)?$/.test(str)) return +str;
+  return null;
+}
+
+function updateStatus() {
+  const n = segments.length;
+  document.getElementById('sb-segs').textContent = n;
+  if (!duration || !n) {
+    document.getElementById('sb-cov').textContent = '0%';
+    document.getElementById('sb-gaps').textContent = '—';
+    return;
+  }
+  const covered = segments.reduce((a,s)=>a+(s.end-s.start),0);
+  document.getElementById('sb-cov').textContent = Math.round(100*covered/duration)+'%';
+  const sorted = [...segments].sort((a,b)=>a.start-b.start);
+  const gaps = sorted.slice(0,-1).filter((s,i)=>sorted[i+1].start - s.end > 1).length;
+  document.getElementById('sb-gaps').textContent = gaps ? `${gaps} gap${gaps>1?'s':''}` : 'none';
+}
+
+function renderAll() { renderTable(); drawWaveform(); }
+
+/* ═══════════════════════════════════════════════
+   CSV IMPORT / EXPORT
+═══════════════════════════════════════════════ */
+function parseCsvFile(file, cb) {
+  const r = new FileReader();
+  r.onload = e => {
+    const segs = [];
+    e.target.result.trim().split('\n').forEach((line, i) => {
+      if (i===0 && /start/i.test(line)) return;
+      const [a,b,c] = line.trim().split(',');
+      const s = +a, end = +b, label = (c||'').trim().toLowerCase();
+      if (!isNaN(s) && !isNaN(end) && ['drop','buildup','breakdown','calm'].includes(label)) {
+        segs.push({start:s, end, label});
+      }
+    });
+    cb(segs);
+  };
+  r.readAsText(file);
+}
+
+document.getElementById('import-btn').addEventListener('click', () => document.getElementById('csv-import-input').click());
+document.getElementById('csv-import-input').addEventListener('change', e => {
+  if (!e.target.files[0]) return;
+  parseCsvFile(e.target.files[0], segs => {
+    saveUndo();
+    segments = segs.map(s=>({...s,id:uid++}));
+    renderAll(); showMsg(`Imported ${segments.length} segments`);
+  });
+});
+
+document.getElementById('export-btn').addEventListener('click', () => {
+  finalizeRec();
+  if (!segments.length) { showMsg('No segments to export'); return; }
+  const rows = [...segments].sort((a,b)=>a.start-b.start)
+    .map(s=>`${s.start.toFixed(3)},${s.end.toFixed(3)},${s.label}`).join('\n');
+  const csv = 'start,end,label\n' + rows;
+  const url = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  const a = document.createElement('a'); a.href=url; a.download=`${songName}_labels.csv`; a.click();
+  URL.revokeObjectURL(url); showMsg(`Exported ${segments.length} segments`);
+});
+
+/* ═══════════════════════════════════════════════
+   TOOLTIP
+═══════════════════════════════════════════════ */
+const tipEl = document.getElementById('tip');
+function tip(x, y, text) {
+  tipEl.textContent = text;
+  tipEl.style.left = (x+12)+'px'; tipEl.style.top = (y-22)+'px';
+  tipEl.classList.add('show');
+}
+function hideTip() { tipEl.classList.remove('show'); }
+
+/* ═══════════════════════════════════════════════
+   STATUS MSG
+═══════════════════════════════════════════════ */
+let _msgT;
+function showMsg(m) {
+  const el = document.getElementById('status-msg');
+  el.textContent = m; clearTimeout(_msgT);
+  _msgT = setTimeout(()=>el.textContent='',3500);
+}
+
+/* ═══════════════════════════════════════════════
+   BUTTON WIRING
+═══════════════════════════════════════════════ */
+document.getElementById('play-btn').addEventListener('click', togglePlay);
+document.getElementById('rew-btn').addEventListener('click', ()=>{ finalizeRec(); resetPlay(); });
+document.getElementById('speed-sel').addEventListener('change', e=>{
+  playRate=+e.target.value; if(isPlaying){const t=getTime();play(t);}
+});
+document.getElementById('undo-btn').addEventListener('click', undo);
+document.getElementById('clear-btn').addEventListener('click', ()=>{
+  if (!segments.length) return;
+  if (confirm('Clear all segments?')) { saveUndo(); segments=[]; finalizeRec(); renderTable(); }
+});
+document.getElementById('nudge-l-btn').addEventListener('click', ()=>nudge(-.1));
+document.getElementById('nudge-r-btn').addEventListener('click', ()=>nudge(+.1));
+
+document.querySelectorAll('.lbtn').forEach(b => b.addEventListener('click', ()=>pressLabel(b.dataset.l)));
+
+/* ═══════════════════════════════════════════════
+   KEYBOARD
+═══════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if (!audioBuffer) return;
+  if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
+  switch (e.key.toLowerCase()) {
+    case ' ':        e.preventDefault(); togglePlay(); break;
+    case 'd':        pressLabel('drop'); break;
+    case 'b':        pressLabel('buildup'); break;
+    case 'k':        pressLabel('breakdown'); break;
+    case 'c':        pressLabel('calm'); break;
+    case 'r':        finalizeRec(); resetPlay(); break;
+    case 'u':        undo(); break;
+    case 'f':        finalizeRec(); break;
+    case 'escape':   finalizeRec(); break;
+    case '[':        nudge(-.1); break;
+    case ']':        nudge(+.1); break;
+    case 'arrowleft':  e.preventDefault(); startOffset=Math.max(0,getTime()-5); if(isPlaying)play(startOffset); break;
+    case 'arrowright': e.preventDefault(); startOffset=Math.min(duration,getTime()+5); if(isPlaying)play(startOffset); break;
+    case '+': case '=': setZoom(zoom*1.3); break;
+    case '-':           setZoom(zoom/1.3); break;
+    case '0':           setZoom(1); break;
+  }
+});
+
+window.addEventListener('resize', ()=>{ if(audioBuffer){ drawWaveform(); updateScrollbar(); } });
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
